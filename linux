@@ -1,0 +1,38 @@
+#!/bin/bash
+KEY_NAME="ClaveSSH"
+SECURITY_GROUP="sg-0a1b2c3d4e5f67890"             
+AMI_ID="ami-00f95a0992bdb68e3"                     
+INSTANCE_TYPE="t2.micro"
+SUBNET_ID="subnet-0a12bc34d5678ef90"               
+REGION_ORIGEN="sa-east-1"
+REGION_DESTINO="us-east-1"
+LINUX_INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id $AMI_ID \
+  --count 1 \
+  --instance-type $INSTANCE_TYPE \
+  --key-name $KEY_NAME \
+  --security-group-ids $SECURITY_GROUP \
+  --subnet-id $SUBNET_ID \
+  --associate-public-ip-address \
+  --region $REGION_ORIGEN \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=EC2-Linux}]' \
+  --query 'Instances[0].InstanceId' --output text)
+aws ec2 wait instance-running --instance-ids $LINUX_INSTANCE_ID --region $REGION_ORIGEN
+LINUX_IMAGE_ID=$(aws ec2 create-image \
+  --instance-id $LINUX_INSTANCE_ID \
+  --name "Linux-Backup-$(date +%F-%H%M)" \
+  --no-reboot \
+  --region $REGION_ORIGEN \
+  --query 'ImageId' --output text)
+
+
+aws ec2 wait image-available --image-ids $LINUX_IMAGE_ID --region $REGION_ORIGEN
+
+
+
+aws ec2 copy-image \
+  --source-region $REGION_ORIGEN \
+  --source-image-id $LINUX_IMAGE_ID \
+  --name "Linux-Backup-Migrated" \
+  --region $REGION_DESTINO
+
