@@ -1,0 +1,33 @@
+#!/bin/bash
+
+KEY_NAME="miClaveSSH"
+SECURITY_GROUP="sg-0f1e2d3c4b5a67890"              
+AMI_ID="ami-05c8f3772c0ea4b29"                      
+INSTANCE_TYPE="t2.micro"
+SUBNET_ID="subnet-0b56de78a12345678"               
+REGION_ORIGEN="sa-east-1"
+REGION_DESTINO="us-east-1"
+WINDOWS_INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id $AMI_ID \
+  --count 1 \
+  --instance-type $INSTANCE_TYPE \
+  --key-name $KEY_NAME \
+  --security-group-ids $SECURITY_GROUP \
+  --subnet-id $SUBNET_ID \
+  --associate-public-ip-address \
+  --region $REGION_ORIGEN \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=EC2-Windows}]' \
+  --query 'Instances[0].InstanceId' --output text)
+aws ec2 wait instance-running --instance-ids $WINDOWS_INSTANCE_ID --region $REGION_ORIGEN
+WINDOWS_IMAGE_ID=$(aws ec2 create-image \
+  --instance-id $WINDOWS_INSTANCE_ID \
+  --name "Windows-Backup-$(date +%F-%H%M)" \
+  --no-reboot \
+  --region $REGION_ORIGEN \
+  --query 'ImageId' --output text)
+aws ec2 wait image-available --image-ids $WINDOWS_IMAGE_ID --region $REGION_ORIGEN
+aws ec2 copy-image \
+  --source-region $REGION_ORIGEN \
+  --source-image-id $WINDOWS_IMAGE_ID \
+  --name "Windows-Backup-Migrated" \
+  --region $REGION_DESTINO
